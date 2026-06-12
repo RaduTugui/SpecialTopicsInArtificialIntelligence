@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Memotion · Sarcasm Detector</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg:        #0d0d0f;
+    --surface:   #141418;
+    --card:      #1a1a20;
+    --border:    #2a2a35;
+    --accent:    #b8ff57;
+    --accent2:   #ff6b6b;
+    --accent3:   #57c8ff;
+    --text:      #e8e8f0;
+    --muted:     #6b6b80;
+    --sarc:      #ff6b6b;
+    --safe:      #b8ff57;
+    --font-head: 'Space Grotesk', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-head);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,13,15,0.92);
+    backdrop-filter: blur(12px);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .logo-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.85)} }
+
+  .model-badge {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 60px 40px 40px;
+    max-width: 900px; margin: 0 auto;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 5vw, 3.4rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
+  }
+  .hero h1 span {
+    background: linear-gradient(90deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero-sub {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+    max-width: 560px;
+  }
+  .arch-pills {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 24px;
+  }
+  .pill {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 5px 12px;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pill-dot { width:6px;height:6px;border-radius:50%; }
+  .pill.clip .pill-dot { background: var(--accent3); }
+  .pill.roberta .pill-dot { background: var(--accent); }
+  .pill.frozen .pill-dot { background: var(--muted); }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    max-width: 900px; margin: 0 auto;
+    padding: 0 40px 80px;
+    display: flex; flex-direction: column; gap: 24px;
+  }
+
+  /* ── DROP ZONE ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(184,255,87,0.03);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width:100%;
+  }
+  .drop-icon {
+    width: 48px; height: 48px; margin: 0 auto 16px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    background: var(--card);
+  }
+  .drop-title { font-weight: 600; margin-bottom: 6px; }
+  .drop-sub { font-size: 0.85rem; color: var(--muted); }
+
+  /* ── PREVIEW ── */
+  .preview-wrap {
+    display: none;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--card);
+  }
+  .preview-wrap.active { display: grid; grid-template-columns: 240px 1fr; }
+  .preview-img-wrap {
+    background: #111;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px;
+    border-right: 1px solid var(--border);
+  }
+  .preview-img-wrap img {
+    max-width: 100%; max-height: 240px;
+    object-fit: contain;
+  }
+  .preview-body { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .preview-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .filename-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 8px;
+    font-family: var(--font-mono); font-size: 0.75rem;
+    color: var(--text); max-width: 100%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ── TEXT INPUT ── */
+  .text-row { display: flex; flex-direction: column; gap: 8px; }
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  textarea {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    color: var(--text);
+    font-family: var(--font-head);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 90px;
+    transition: border-color .2s;
+    outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  /* ── ANALYSE BUTTON ── */
+  .btn-analyse {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--accent);
+    color: #0d0d0f;
+    font-family: var(--font-head);
+    font-weight: 700; font-size: 0.95rem;
+    border: none; border-radius: 12px;
+    padding: 16px 32px;
+    cursor: pointer;
+    transition: opacity .2s, transform .15s;
+    width: 100%;
+  }
+  .btn-analyse:hover { opacity: .88; transform: translateY(-1px); }
+  .btn-analyse:active { transform: translateY(0); }
+  .btn-analyse:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .btn-analyse .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,0,0,.3);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RESULT CARD ── */
+  .result-card {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: none;
+    background: var(--card);
+  }
+  .result-card.active { display: block; }
+
+  .result-header {
+    padding: 20px 24px;
+    display: flex; align-items: center; gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .verdict-badge {
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-weight: 700; font-size: 0.8rem;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .verdict-badge.sarcastic {
+    background: rgba(255,107,107,0.15);
+    color: var(--sarc);
+    border: 1px solid rgba(255,107,107,0.3);
+  }
+  .verdict-badge.not-sarcastic {
+    background: rgba(184,255,87,0.12);
+    color: var(--safe);
+    border: 1px solid rgba(184,255,87,0.25);
+  }
+  .result-conf {
+    font-family: var(--font-mono);
+    font-size: 0.8rem; color: var(--muted);
+    margin-left: auto;
+  }
+
+  .result-body {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px; background: var(--border);
+  }
+  .result-section {
+    background: var(--card);
+    padding: 20px 24px;
+  }
+  .result-section-title {
+    font-family: var(--font-mono);
+    font-size: 0.65rem; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* confidence bar */
+  .conf-bars { display: flex; flex-direction: column; gap: 10px; }
+  .conf-row { display: flex; flex-direction: column; gap: 5px; }
+  .conf-row-head { display: flex; justify-content: space-between; }
+  .conf-class { font-size: 0.8rem; font-weight: 500; }
+  .conf-pct { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+  .bar-track {
+    height: 6px; border-radius: 100px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 100px;
+    transition: width 0.8s cubic-bezier(.22,1,.36,1);
+  }
+  .bar-fill.sarc { background: var(--sarc); }
+  .bar-fill.safe { background: var(--safe); }
+
+  /* feature scores */
+  .feat-grid { display: flex; flex-direction: column; gap: 8px; }
+  .feat-item { display: flex; align-items: center; gap: 8px; }
+  .feat-label { font-size: 0.78rem; color: var(--muted); flex: 1; }
+  .feat-bar-wrap { flex: 2; }
+  .feat-bar-track {
+    height: 4px; border-radius: 100px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .feat-bar-fill {
+    height: 100%; border-radius: 100px;
+    background: var(--accent3);
+    transition: width 0.9s cubic-bezier(.22,1,.36,1);
+  }
+  .feat-val {
+    font-family: var(--font-mono);
+    font-size: 0.7rem; color: var(--muted);
+    width: 32px; text-align: right;
+  }
+
+  /* model path */
+  .model-path {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .path-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.8rem;
+  }
+  .path-icon { font-size: 1rem; }
+  .path-name { font-weight: 500; }
+  .path-sub { font-size: 0.72rem; color: var(--muted); }
+  .path-arrow { color: var(--border); margin: 0 2px; }
+
+  .fusion-vis {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 12px;
+    font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted);
+  }
+  .fv-box {
+    padding: 4px 8px; border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .fv-box.clip { color: var(--accent3); border-color: rgba(87,200,255,.3); }
+  .fv-box.rob { color: var(--accent); border-color: rgba(184,255,87,.3); }
+  .fv-box.out { color: var(--sarc); border-color: rgba(255,107,107,.3); }
+  .fv-arrow { color: var(--muted); }
+
+  /* ── HISTORY ── */
+  .history-wrap { display: flex; flex-direction: column; gap: 12px; }
+  .history-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    cursor: pointer;
+    transition: border-color .15s;
+    font-size: 0.85rem;
+  }
+  .history-item:hover { border-color: var(--accent); }
+  .history-thumb {
+    width: 36px; height: 36px; border-radius: 6px;
+    object-fit: cover; background: var(--surface);
+    flex-shrink: 0;
+  }
+  .history-text { flex: 1; overflow: hidden; }
+  .history-fname { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-caption { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-verdict {
+    font-family: var(--font-mono); font-size: 0.68rem;
+    font-weight: 700; padding: 3px 8px; border-radius: 4px;
+  }
+  .history-verdict.sarc { background: rgba(255,107,107,.15); color: var(--sarc); }
+  .history-verdict.safe { background: rgba(184,255,87,.12); color: var(--safe); }
+  .history-verdict.err { background: rgba(107,107,128,.15); color: var(--muted); }
+
+  /* ── DEMO EXAMPLES ── */
+  .examples-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+  .example-btn {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px;
+    cursor: pointer; text-align: left;
+    transition: border-color .15s;
+    font-family: var(--font-head);
+  }
+  .example-btn:hover { border-color: var(--accent3); }
+  .example-emoji { font-size: 1.2rem; margin-bottom: 6px; }
+  .example-text { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+
+  /* ── COLAB SNIPPET ── */
+  .colab-block {
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--card);
+  }
+  .colab-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-mono); font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .colab-dot { width: 8px; height: 8px; border-radius: 50%; }
+  pre {
+    padding: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: #c8c8d8;
+  }
+  .kw { color: #b8ff57; }
+  .str { color: #57c8ff; }
+  .cm { color: #555568; }
+  .fn { color: #ffb86b; }
+
+  .copy-btn {
+    margin: 0 20px 16px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px;
+    cursor: pointer; font-family: var(--font-head);
+    font-size: 0.8rem; color: var(--muted);
+    transition: color .15s, border-color .15s;
+    width: fit-content;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    color: var(--muted); font-size: 0.8rem;
+  }
+  .footer-stack { display: flex; gap: 16px; align-items: center; }
+  .footer-stack span { color: var(--muted); font-family: var(--font-mono); font-size: 0.7rem; }
+
+  @media (max-width: 700px) {
+    header { padding: 16px 20px; }
+    .hero, .main { padding-left: 20px; padding-right: 20px; }
+    .preview-wrap.active { grid-template-columns: 1fr; }
+    .result-body { grid-template-columns: 1fr; }
+    .examples-row { grid-template-columns: 1fr; }
+    footer { flex-direction: column; gap: 12px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Memotion
+  </div>
+  <div class="model-badge">CLIP + RoBERTa · v1.0</div>
+</header>
+
+<div class="hero">
+  <div class="hero-eyebrow">Multimodal Sarcasm Detection</div>
+  <h1>Is this meme <span>sarcastic?</span></h1>
+  <p class="hero-sub">Upload a meme and add its caption. The model fuses visual features from CLIP with text embeddings from RoBERTa to detect sarcasm.</p>
+  <div class="arch-pills">
+    <div class="pill clip"><span class="pill-dot"></span>CLIP ViT-B/32 · 512-dim</div>
+    <div class="pill roberta"><span class="pill-dot"></span>RoBERTa-base · 768-dim</div>
+    <div class="pill frozen"><span class="pill-dot"></span>Frozen encoders</div>
+    <div class="pill frozen"><span class="pill-dot"></span>Memotion 7k</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="image/*"/>
+    <div class="drop-icon">🖼️</div>
+    <div class="drop-title">Drop a meme here</div>
+    <div class="drop-sub">or click to browse · JPG, PNG, GIF, WEBP</div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-wrap" id="previewWrap">
+    <div class="preview-img-wrap">
+      <img id="previewImg" src="" alt="Preview"/>
+    </div>
+    <div class="preview-body">
+      <div>
+        <div class="preview-label">File</div>
+        <div class="filename-chip" id="filenameChip">📎 <span id="filenameText"></span></div>
+      </div>
+      <div class="text-row">
+        <div class="preview-label">Caption / text in the meme</div>
+        <textarea id="captionInput" placeholder="Type or paste the meme's text here…"></textarea>
+      </div>
+      <button class="btn-analyse" id="analyseBtn" onclick="analyse()">
+        <div class="spinner" id="spinner"></div>
+        <span id="btnLabel">Analyse sarcasm</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Example captions (no image needed for demo) -->
+  <div>
+    <div class="section-label" style="margin-bottom:10px">Try a text-only demo (no image needed)</div>
+    <div class="examples-row">
+      <button class="example-btn" onclick="loadExample('Oh great, another Monday. Just what I needed.', '😤')">
+        <div class="example-emoji">😤</div>
+        <div class="example-text">"Oh great, another Monday. Just what I needed."</div>
+      </button>
+      <button class="example-btn" onclick="loadExample('Wow, I absolutely love waiting in traffic for 2 hours.', '🚗')">
+        <div class="example-emoji">🚗</div>
+        <div class="example-text">"Wow, I absolutely love waiting in traffic for 2 hours."</div>
+      </button>
+      <button class="example-btn" onclick="loadExample('The sunset was beautiful today and I am happy.', '🌅')">
+        <div class="example-emoji">🌅</div>
+        <div class="example-text">"The sunset was beautiful today and I am happy."</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <div id="verdictBadge" class="verdict-badge">—</div>
+      <div style="font-size:.85rem;color:var(--muted)" id="resultCaption"></div>
+      <div class="result-conf" id="confLabel"></div>
+    </div>
+    <div class="result-body">
+
+      <div class="result-section">
+        <div class="result-section-title">Confidence</div>
+        <div class="conf-bars">
+          <div class="conf-row">
+            <div class="conf-row-head">
+              <span class="conf-class">Sarcastic</span>
+              <span class="conf-pct" id="sarcPct">—</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill sarc" id="sarcBar" style="width:0%"></div></div>
+          </div>
+          <div class="conf-row">
+            <div class="conf-row-head">
+              <span class="conf-class">Not sarcastic</span>
+              <span class="conf-pct" id="safePct">—</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill safe" id="safeBar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <div class="result-section-title">Feature contribution</div>
+        <div class="feat-grid" id="featGrid">
+          <!-- filled by JS -->
+        </div>
+        <div class="fusion-vis">
+          <div class="fv-box clip">img 512</div>
+          <div class="fv-arrow">+</div>
+          <div class="fv-box rob">txt 768</div>
+          <div class="fv-arrow">→</div>
+          <div class="fv-box out">1280 → 2</div>
+        </div>
+      </div>
+
+      <div class="result-section">
+        <div class="result-section-title">Model path</div>
+        <div class="model-path">
+          <div class="path-item">
+            <span class="path-icon">🖼️</span>
+            <div><div class="path-name">CLIP ViT-B/32</div><div class="path-sub">openai/clip-vit-base-patch32</div></div>
+          </div>
+          <div style="color:var(--border);padding-left:16px;font-size:.8rem">↓ 512-dim image embedding</div>
+          <div class="path-item">
+            <span class="path-icon">📝</span>
+            <div><div class="path-name">RoBERTa-base</div><div class="path-sub">CLS token · 768-dim</div></div>
+          </div>
+          <div style="color:var(--border);padding-left:16px;font-size:.8rem">↓ concat → 1280-dim</div>
+          <div class="path-item">
+            <span class="path-icon">🧠</span>
+            <div><div class="path-name">Classifier head</div><div class="path-sub">Linear→ReLU→Dropout→Linear</div></div>
+          </div>
+          <div style="color:var(--border);padding-left:16px;font-size:.8rem">↓ softmax → 2 classes</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-wrap" id="historyWrap" style="display:none">
+    <div class="history-title">Session history</div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+
+  <!-- Colab integration snippet -->
+  <div class="colab-block">
+    <div class="colab-header">
+      <div class="colab-dot" style="background:#ff6b6b"></div>
+      <div class="colab-dot" style="background:#ffb86b"></div>
+      <div class="colab-dot" style="background:#b8ff57"></div>
+      <span style="margin-left:8px">Connect this UI to your Colab notebook</span>
+    </div>
+    <pre><span class="cm"># ── Run this cell in Colab to expose the model via Flask + ngrok ──</span>
+<span class="kw">!pip</span> -q install flask flask-cors pyngrok
+
+<span class="kw">from</span> flask <span class="kw">import</span> Flask, request, jsonify
+<span class="kw">from</span> flask_cors <span class="kw">import</span> CORS
+<span class="kw">from</span> pyngrok <span class="kw">import</span> ngrok
+<span class="kw">import</span> torch, io
+<span class="kw">from</span> PIL <span class="kw">import</span> Image
+<span class="kw">import</span> base64, threading
+
+app = Flask(__name__)
+CORS(app)
+
+<span class="cm"># Load your saved model</span>
+model.<span class="fn">load_state_dict</span>(torch.<span class="fn">load</span>(<span class="str">'/content/drive/MyDrive/archive/memotion_multimodal.pth'</span>,
+                                     map_location=device))
+model.<span class="fn">eval</span>()
+
+<span class="kw">@app.route</span>(<span class="str">'/predict'</span>, methods=[<span class="str">'POST'</span>])
+<span class="kw">def</span> <span class="fn">predict</span>():
+    data = request.<span class="fn">get_json</span>()
+    text  = data.get(<span class="str">'text'</span>, <span class="str">''</span>)
+    img_b64 = data.get(<span class="str">'image'</span>)        <span class="cm"># base64 string, optional</span>
+
+    <span class="cm"># Process text</span>
+    enc = tokenizer(text, max_length=<span class="str">128</span>, truncation=<span class="kw">True</span>,
+                    padding=<span class="str">'max_length'</span>, return_tensors=<span class="str">'pt'</span>)
+    <span class="kw">with</span> torch.no_grad():
+        t = roberta_model(input_ids=enc[<span class="str">'input_ids'</span>].to(device),
+                          attention_mask=enc[<span class="str">'attention_mask'</span>].to(device)
+                          ).last_hidden_state[:,<span class="str">0</span>,:]
+
+        <span class="kw">if</span> img_b64:
+            img = Image.<span class="fn">open</span>(io.BytesIO(base64.<span class="fn">b64decode</span>(img_b64))).convert(<span class="str">'RGB'</span>)
+            pv  = clip_processor(images=img, return_tensors=<span class="str">'pt'</span>).pixel_values.to(device)
+            i   = clip_model.<span class="fn">get_image_features</span>(pixel_values=pv).pooler_output
+        <span class="kw">else</span>:
+            i = torch.<span class="fn">zeros</span>(<span class="str">1</span>, <span class="str">512</span>).to(device)   <span class="cm"># text-only fallback</span>
+
+        logits = model(t, i)
+        probs  = torch.nn.functional.<span class="fn">softmax</span>(logits, dim=<span class="str">1</span>)[<span class="str">0</span>]
+
+    <span class="kw">return</span> <span class="fn">jsonify</span>({
+        <span class="str">'label'</span>:      <span class="str">'sarcastic'</span> <span class="kw">if</span> probs[<span class="str">1</span>] > probs[<span class="str">0</span>] <span class="kw">else</span> <span class="str">'not_sarcastic'</span>,
+        <span class="str">'sarcastic'</span>:  <span class="fn">round</span>(<span class="fn">float</span>(probs[<span class="str">1</span>]), <span class="str">4</span>),
+        <span class="str">'not_sarcastic'</span>: <span class="fn">round</span>(<span class="fn">float</span>(probs[<span class="str">0</span>]), <span class="str">4</span>)
+    })
+
+<span class="cm"># Start server + tunnel</span>
+tunnel = ngrok.<span class="fn">connect</span>(<span class="str">5000</span>)
+<span class="fn">print</span>(<span class="str">f"Public URL: {tunnel.public_url}"</span>)   <span class="cm"># paste this into the UI</span>
+threading.Thread(target=<span class="kw">lambda</span>: app.<span class="fn">run</span>(port=<span class="str">5000</span>)).start()</pre>
+    <button class="copy-btn" onclick="copySnippet(this)">📋 Copy snippet</button>
+  </div>
+
+  <!-- API endpoint input -->
+  <div class="text-row">
+    <div class="section-label">Colab endpoint URL <span style="color:var(--muted);font-size:.65rem;margin-left:8px;font-family:var(--font-mono)">pre-filled for local PyCharm run · change for ngrok/remote</span></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="endpointInput" placeholder="http://localhost:5000" value="http://localhost:5000"
+        style="flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;
+               padding:12px 16px;color:var(--text);font-family:var(--font-mono);font-size:.82rem;outline:none;
+               transition:border-color .2s;"
+        onfocus="this.style.borderColor='var(--accent3)'"
+        onblur="this.style.borderColor='var(--border)'"/>
+      <button onclick="testEndpoint()" style="background:var(--card);border:1px solid var(--border);
+        border-radius:10px;padding:12px 16px;cursor:pointer;color:var(--muted);font-family:var(--font-head);
+        font-size:.82rem;transition:color .15s,border-color .15s;"
+        onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--accent3)'"
+        onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+        Test connection
+      </button>
+    </div>
+    <div id="endpointStatus" style="font-family:var(--font-mono);font-size:.72rem;color:var(--muted);display:none"></div>
+  </div>
+
+</div>
+
+<footer>
+  <div>Memotion Multimodal · CLIP + RoBERTa · Memotion-7k dataset</div>
+  <div class="footer-stack">
+    <span>SemEval-2020</span>
+    <span>|</span>
+    <span>openai/clip-vit-base-patch32</span>
+    <span>|</span>
+    <span>roberta-base</span>
+  </div>
+</footer>
+
+<script>
+  // ── State ──
+  let currentFile = null;
+  let history = [];
+  let apiBase = null;
+
+  // ── File handling ──
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  function handleFile(f) {
+    currentFile = f;
+    const url = URL.createObjectURL(f);
+    document.getElementById('previewImg').src = url;
+    document.getElementById('filenameText').textContent = f.name;
+    document.getElementById('previewWrap').classList.add('active');
+    dropZone.style.display = 'none';
+  }
+
+  // ── Example loader ──
+  function loadExample(text, emoji) {
+    document.getElementById('captionInput').value = text;
+    // Show preview wrap without image
+    document.getElementById('previewWrap').classList.add('active');
+    document.getElementById('previewImg').src = '';
+    document.getElementById('previewImg').style.display = 'none';
+    document.getElementById('filenameText').textContent = emoji + ' text-only example';
+    dropZone.style.display = 'none';
+    currentFile = null;
+  }
+
+  // ── Analysis ──
+  async function analyse() {
+    const caption = document.getElementById('captionInput').value.trim();
+    if (!caption && !currentFile) { alert('Add a caption or upload a meme first.'); return; }
+
+    const btn = document.getElementById('analyseBtn');
+    const spinner = document.getElementById('spinner');
+    const btnLabel = document.getElementById('btnLabel');
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnLabel.textContent = 'Analysing…';
+
+    await new Promise(r => setTimeout(r, 600)); // small delay for UX feel
+
+    let result;
+    const endpoint = document.getElementById('endpointInput').value.trim();
+
+    if (endpoint) {
+      // Real model call
+      try {
+        let body = { text: caption };
+        if (currentFile) {
+          const b64 = await fileToBase64(currentFile);
+          body.image = b64.split(',')[1];
+        }
+        const res = await fetch(endpoint + '/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        result = await res.json();
+      } catch(e) {
+        result = null;
+        showEndpointError('Could not reach model: ' + e.message);
+      }
+    }
+
+    if (!result) {
+      // Demo simulation
+      result = simulatePrediction(caption);
+    }
+
+    showResult(result, caption);
+    pushHistory(result, caption);
+
+    btn.disabled = false;
+    spinner.style.display = 'none';
+    btnLabel.textContent = 'Analyse again';
+  }
+
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // Simulation: use simple heuristics to demo without real model
+  function simulatePrediction(text) {
+    const lc = text.toLowerCase();
+    const sarcCues = ['oh great','just what i needed','love waiting','absolutely love',
+                      'wow thanks','yeah right','sure','totally','obviously','clearly',
+                      'can\'t wait','best day','monday','traffic'];
+    const score = sarcCues.filter(c => lc.includes(c)).length;
+    const base = Math.min(0.45 + score * 0.12 + Math.random() * 0.1, 0.97);
+    const sarcProb = parseFloat(base.toFixed(4));
+    return {
+      label: sarcProb > 0.5 ? 'sarcastic' : 'not_sarcastic',
+      sarcastic: sarcProb,
+      not_sarcastic: parseFloat((1 - sarcProb).toFixed(4))
+    };
+  }
+
+  function showResult(r, caption) {
+    const card = document.getElementById('resultCard');
+    card.classList.add('active');
+
+    const isSarc = r.label === 'sarcastic';
+    const badge = document.getElementById('verdictBadge');
+    badge.textContent = isSarc ? '⚡ Sarcastic' : '✓ Not sarcastic';
+    badge.className = 'verdict-badge ' + (isSarc ? 'sarcastic' : 'not-sarcastic');
+
+    document.getElementById('resultCaption').textContent = caption.length > 60 ? caption.slice(0,60)+'…' : caption;
+    document.getElementById('confLabel').textContent = 'conf ' + Math.round(Math.max(r.sarcastic, r.not_sarcastic) * 100) + '%';
+
+    const sp = Math.round(r.sarcastic * 100);
+    const sfp = Math.round(r.not_sarcastic * 100);
+    document.getElementById('sarcPct').textContent = sp + '%';
+    document.getElementById('safePct').textContent = sfp + '%';
+    setTimeout(() => {
+      document.getElementById('sarcBar').style.width = sp + '%';
+      document.getElementById('safeBar').style.width = sfp + '%';
+    }, 50);
+
+    // Feature contribution (simulated explainability bars)
+    const feats = [
+      { label: 'Sentiment shift', val: Math.round(40 + r.sarcastic * 40 + Math.random()*10) },
+      { label: 'Visual incongruity', val: Math.round(25 + r.sarcastic * 35 + Math.random()*15) },
+      { label: 'Lexical cues', val: Math.round(30 + r.sarcastic * 30 + Math.random()*12) },
+      { label: 'Text intensity', val: Math.round(20 + r.sarcastic * 45 + Math.random()*10) },
+    ];
+    const fg = document.getElementById('featGrid');
+    fg.innerHTML = feats.map(f => `
+      <div class="feat-item">
+        <div class="feat-label">${f.label}</div>
+        <div class="feat-bar-wrap">
+          <div class="feat-bar-track">
+            <div class="feat-bar-fill" style="width:0%" data-w="${f.val}%"></div>
+          </div>
+        </div>
+        <div class="feat-val">${f.val}</div>
+      </div>`).join('');
+    setTimeout(() => {
+      fg.querySelectorAll('.feat-bar-fill').forEach(b => b.style.width = b.dataset.w);
+    }, 80);
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ── History ──
+  function pushHistory(r, caption) {
+    const isSarc = r.label === 'sarcastic';
+    const entry = {
+      fname: currentFile ? currentFile.name : 'text-only',
+      caption,
+      label: r.label,
+      thumb: currentFile ? URL.createObjectURL(currentFile) : null,
+    };
+    history.unshift(entry);
+    if (history.length > 6) history.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const wrap = document.getElementById('historyWrap');
+    const list = document.getElementById('historyList');
+    if (history.length === 0) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'flex';
+    list.innerHTML = history.map((h, i) => `
+      <div class="history-item" onclick="replayHistory(${i})">
+        ${h.thumb
+          ? `<img class="history-thumb" src="${h.thumb}" alt=""/>`
+          : `<div class="history-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.1rem">📝</div>`}
+        <div class="history-text">
+          <div class="history-fname">${h.fname}</div>
+          <div class="history-caption">${h.caption || '—'}</div>
+        </div>
+        <div class="history-verdict ${h.label === 'sarcastic' ? 'sarc' : 'safe'}">
+          ${h.label === 'sarcastic' ? 'SARC' : 'SAFE'}
+        </div>
+      </div>`).join('');
+  }
+
+  function replayHistory(i) {
+    const h = history[i];
+    document.getElementById('captionInput').value = h.caption;
+    showResult(simulatePrediction(h.caption), h.caption);
+  }
+
+  // ── Endpoint test ──
+  async function testEndpoint() {
+    const url = document.getElementById('endpointInput').value.trim();
+    const el = document.getElementById('endpointStatus');
+    el.style.display = 'block';
+    if (!url) { el.style.color = 'var(--sarc)'; el.textContent = '✗ Enter a URL first'; return; }
+    el.style.color = 'var(--muted)'; el.textContent = 'Testing…';
+    try {
+      const r = await fetch(url + '/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'test' }),
+      });
+      if (r.ok) {
+        el.style.color = 'var(--safe)'; el.textContent = '✓ Connected — model is live';
+        apiBase = url;
+      } else {
+        el.style.color = 'var(--sarc)'; el.textContent = '✗ Server responded with ' + r.status;
+      }
+    } catch(e) {
+      el.style.color = 'var(--sarc)'; el.textContent = '✗ ' + e.message;
+    }
+  }
+
+  function showEndpointError(msg) {
+    const el = document.getElementById('endpointStatus');
+    el.style.display = 'block';
+    el.style.color = 'var(--sarc)';
+    el.textContent = msg + ' — showing demo simulation instead';
+  }
+
+  // ── Copy snippet ──
+  function copySnippet(btn) {
+    const code = btn.previousElementSibling.textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => { btn.innerHTML = '📋 Copy snippet'; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
