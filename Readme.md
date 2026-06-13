@@ -1,6 +1,6 @@
 # Memotion Multimodal Sarcasm Detector
 
-A Flask web application that detects sarcasm in memes by combining visual features (CLIP) and text features (RoBERTa). Built on the **Memotion 7k** dataset as part of a research project on computational humor, sarcasm and irony detection.
+A Flask web application that detects sarcasm in memes by combining visual features (CLIP) and text features (RoBERTa). Built on the **Memotion 7k** dataset as part of a research project on computational humor, sarcasm and irony detection with a final accuracy of 78%.
 
 ---
 
